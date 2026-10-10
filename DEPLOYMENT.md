@@ -1,28 +1,23 @@
-# 当前部署：GitHub 网址 + GitHub 登录
+# 当前部署：GitHub 网址 + 用户名密码登录
 
 前端：https://zhenghaohong.github.io/life-notebook/
-
 后台：https://life-notebook-api.zhengteshuai.workers.dev
 
-登录应用：Life Notebook · 日常。回调 URL 为后台 `/callback`，只允许 `zhenghaohong` 登录，不请求仓库 scope。
+用户名 `zhenghaohong`，网站内直接输入密码，不跳转 GitHub。Cloudflare Worker 校验密码并签发 30 分钟会话；API 每次请求都验证签名、账号、来源和有效期。会话仅在页面内存中，刷新后需要登录；浏览器密码管理器可由用户自行选择使用。密码不会写入前端、Git 仓库或 localStorage。
 
-这个方案替代 README 中「同一自定义域名 + Cloudflare Access」的原方案，无需自定义域名或激活 Zero Trust 计费计划。
+Worker 变量：AUTH_MODE=password、LOGIN_USERNAME=zhenghaohong，以及 wrangler.toml 中的仓库和来源配置。
+Worker 加密密钥：LOGIN_PASSWORD（独立的至少 16 字符网站密码）、GITHUB_TOKEN（仅私有数据仓库 Contents 读写）、SESSION_SECRET（至少32字符随机值）；现有部署也可使用已加密保存的 GITHUB_OAUTH_SECRET 作为签名密钥，无需 OAuth 授权。
 
-## Worker 环境变量
+LOGIN_RATE_LIMIT 为 Cloudflare 速率限制器，namespace_id=1001001，limit=5，period=60，以连接 IP 为键；缺少绑定时拒绝登录。此限制按 Cloudflare 边缘位置执行，并非全球账号锁定。使用强且不重复的密码。
 
-AUTH_MODE=github，FRONTEND_ORIGIN=https://zhenghaohong.github.io，ALLOWED_GITHUB_LOGIN=zhenghaohong，GITHUB_OWNER=zhenghaohong，GITHUB_REPO=life-private-data，GITHUB_BRANCH=main。GITHUB_OAUTH_CLIENT_ID 是公开应用 ID。
+GitHub Token 到期后需要替换后台 GITHUB_TOKEN，网站重新登录不会延长 Token 有效期。
 
-以下值只放入 Cloudflare Worker 的 **Secret** 类型：
+数据路径：cost/YYYY/MM/YYYY-MM-DD.json、daily/YYYY/MM/YYYY-MM-DD.md、settings/tags.json；每次保存检查文件 SHA，避免覆盖其他设备修改。不使用 SQL。
 
-- GITHUB_OAUTH_SECRET：GitHub OAuth 应用的 client secret。用来在后台兑换登录身份，并签发应用短期会话。
-- GITHUB_TOKEN：仅授权 `life-private-data`、Contents Read and write 的 fine-grained PAT。不需要 Actions、Administration、其他仓库或账户权限。
+本地检查：npm run check、npm test、npm run build。部署：npm run deploy:worker；前端推送 main 自动通过 GitHub Actions 发布。web/config.js demo=false 为正式模式；本地演示请改为 true，数据独立。
 
-前端 config.js 的 apiBase 为后台地址。正式接入并验证后台后再将 demo 改为 false。
+密码登录替代早期 README 的 Cloudflare Access 和 GitHub OAuth 方案。无需自定义域名或 Zero Trust 订阅。旧 OAuth 应用目前保留，但 password 模式不使用它的登录路由。
 
-## 登录与隐私
+上线仍需用户保存 LOGIN_PASSWORD，并完成真实登录与私有仓库读写验证。
 
-用户点击 GitHub 登录时打开独立窗口。Worker 使用有签名的 10 分钟状态 Cookie 防止登录 CSRF，验证回调后查询 GitHub 身份，检查唯一允许账号，再通过 postMessage 向固定前端 origin 返回 30 分钟会话。前端同时验证窗口来源、origin 和随机 state。
-
-私有仓库 PAT、OAuth client secret、GitHub OAuth access token 都不会发送到前端。前端短期会话只存在内存，不保存到浏览器存储或 URL。刷新页面需再次登录，GitHub 已登录时通常可快速完成。API 请求不用跨站 Cookie，适用于 Safari 的第三方 Cookie 限制。退出应用只清除当前网页会话，不退出整个 GitHub 账号；会话自然过期或更换服务端密钥失效。
-
-若浏览器阻止弹出窗口或身份提供商切断 opener，页面会提示重新发起登录；真实 iPhone Safari 仍需上线验收。后台不使用 SQL。
+参考：https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/

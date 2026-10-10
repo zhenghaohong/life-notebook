@@ -5,7 +5,8 @@ workers_dev = true
 # Uncomment after setting your domain:
 # routes = [{ pattern = "api.example.com", custom_domain = true }]
 [vars]
-AUTH_MODE = "github"
+AUTH_MODE = "password"
+LOGIN_USERNAME = "zhenghaohong"
 ALLOWED_GITHUB_LOGIN = "zhenghaohong"
 GITHUB_OAUTH_CLIENT_ID = "Ov23liTgEktFFolM4u27"
 FRONTEND_ORIGIN = "https://zhenghaohong.github.io"
@@ -16,3 +17,8 @@ GITHUB_BRANCH = "main"
 
 
 
+
+[[ratelimits]]
+name = "LOGIN_RATE_LIMIT"
+namespace_id = "1001001"
+simple = { limit = 5, period = 60 }
