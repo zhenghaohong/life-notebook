@@ -13,3 +13,10 @@ test('password login issues scoped session; wrong password, origin, missing limi
  assert.equal((await login({username:env.LOGIN_USERNAME,password:env.LOGIN_PASSWORD},{LOGIN_RATE_LIMIT:{limit:async()=>({success:false})}})).status,429);
  const foreign=await worker.fetch(new Request('https://example.workers.dev/api/login',{method:'POST',headers:{Origin:'https://foreign.example','Content-Type':'application/json'},body:'{}'}),env);assert.equal(foreign.status,403);
 });
+
+test('remember choice grants seven days only for boolean true; ordinary login stays thirty minutes',async()=>{
+ for(const [remember,seconds] of [[true,604800],[false,1800],['true',1800]]){
+  const response=await login({username:env.LOGIN_USERNAME,password:env.LOGIN_PASSWORD,remember});const session=await response.json();const payload=JSON.parse(Buffer.from(session.token.split('.')[1],'base64url').toString());assert.equal(payload.exp-payload.iat,seconds);
+  const me=await worker.fetch(new Request('https://example.workers.dev/api/me',{headers:{Origin:origin,Authorization:'Bearer '+session.token}}),env);assert.equal(me.status,200);
+ }
+});
