@@ -33,7 +33,10 @@ function secret(env) {
   return new TextEncoder().encode(value);
 }
 export async function passwordLogin(request, env) {
-  if (!env.LOGIN_USERNAME || !env.LOGIN_PASSWORD || env.LOGIN_PASSWORD.length < 16 || !env.LOGIN_RATE_LIMIT) throw new HttpError(503, '账号登录尚未配置完成');
+  if (!env.LOGIN_USERNAME) throw new HttpError(503, '后台缺少 LOGIN_USERNAME');
+  if (!env.LOGIN_PASSWORD) throw new HttpError(503, '后台缺少 LOGIN_PASSWORD，请加密保存网站密码');
+  if (env.LOGIN_PASSWORD.length < 16) throw new HttpError(503, '网站密码不足 16 个字符，请在 Cloudflare 重新保存至少 16 个字符的密码');
+  if (!env.LOGIN_RATE_LIMIT || typeof env.LOGIN_RATE_LIMIT.limit !== 'function') throw new HttpError(503, '后台缺少 LOGIN_RATE_LIMIT 速率限制绑定');
   if (request.headers.get('Origin') !== env.FRONTEND_ORIGIN || !request.headers.get('Content-Type')?.startsWith('application/json')) throw new HttpError(403, '登录来源无效');
   const limited = await env.LOGIN_RATE_LIMIT.limit({key:'login:'+(request.headers.get('CF-Connecting-IP') || 'unknown')});
   if (!limited.success) throw new HttpError(429, '尝试过于频繁，请一分钟后重试');
@@ -45,7 +48,7 @@ export async function passwordLogin(request, env) {
   const [given,expected] = await Promise.all([digest(body.password),digest(env.LOGIN_PASSWORD)]);
   let diff=0; for(let i=0;i<given.length;i++)diff |= given[i]^expected[i];
   if (diff || body.username !== env.LOGIN_USERNAME) throw new HttpError(401, '用户名或密码错误');
-  const expiresAt = Math.floor(Date.now()/1000)+(body.remember === true ? 7*24*3600 : 1800);
+  const expiresAt = Math.floor(Date.now()/1000)+(body.remember === true ? 30*24*3600 : 1800);
   const token = await new SignJWT({login:env.LOGIN_USERNAME,purpose:'notebook-session'})
     .setProtectedHeader({alg:'HS256'}).setIssuer(new URL(request.url).origin).setAudience(env.FRONTEND_ORIGIN)
     .setSubject(env.LOGIN_USERNAME).setIssuedAt().setExpirationTime(expiresAt).sign(secret(env));
@@ -58,7 +61,7 @@ export async function verifySession(request, env) {
   let payload;
   try {
     ({payload} = await jwtVerify(token, key, {
-      issuer: new URL(request.url).origin, audience: env.FRONTEND_ORIGIN, algorithms: ['HS256'], maxTokenAge: env.AUTH_MODE === 'password' ? '7d' : '30m'
+      issuer: new URL(request.url).origin, audience: env.FRONTEND_ORIGIN, algorithms: ['HS256'], maxTokenAge: env.AUTH_MODE === 'password' ? '30d' : '30m'
     }));
     if (payload.purpose !== 'notebook-session') throw new Error('wrong purpose');
   } catch { throw new HttpError(401, '登录已过期，请重新登录'); }
