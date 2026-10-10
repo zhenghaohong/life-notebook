@@ -35,7 +35,7 @@ function secret(env) {
 export async function passwordLogin(request, env) {
   if (!env.LOGIN_USERNAME) throw new HttpError(503, '后台缺少 LOGIN_USERNAME');
   if (!env.LOGIN_PASSWORD) throw new HttpError(503, '后台缺少 LOGIN_PASSWORD，请加密保存网站密码');
-  if (env.LOGIN_PASSWORD.length < 16) throw new HttpError(503, '网站密码不足 16 个字符，请在 Cloudflare 重新保存至少 16 个字符的密码');
+  if (env.LOGIN_PASSWORD.length < 8) throw new HttpError(503, '网站密码不足 8 个字符，请在 Cloudflare 重新保存至少 8 个字符的密码');
   if (!env.LOGIN_RATE_LIMIT || typeof env.LOGIN_RATE_LIMIT.limit !== 'function') throw new HttpError(503, '后台缺少 LOGIN_RATE_LIMIT 速率限制绑定');
   if (request.headers.get('Origin') !== env.FRONTEND_ORIGIN || !request.headers.get('Content-Type')?.startsWith('application/json')) throw new HttpError(403, '登录来源无效');
   const limited = await env.LOGIN_RATE_LIMIT.limit({key:'login:'+(request.headers.get('CF-Connecting-IP') || 'unknown')});
