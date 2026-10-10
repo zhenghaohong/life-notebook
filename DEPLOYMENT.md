@@ -6,7 +6,7 @@
 用户名 `zhenghaohong`，网站内直接输入密码，不跳转 GitHub。Cloudflare Worker 校验密码并签发 30 分钟会话；API 每次请求都验证签名、账号、来源和有效期。会话仅在页面内存中，刷新后需要登录；浏览器密码管理器可由用户自行选择使用。密码不会写入前端、Git 仓库或 localStorage。
 
 Worker 变量：AUTH_MODE=password、LOGIN_USERNAME=zhenghaohong，以及 wrangler.toml 中的仓库和来源配置。
-Worker 加密密钥：LOGIN_PASSWORD（独立的至少 16 字符网站密码）、GITHUB_TOKEN（仅私有数据仓库 Contents 读写）、SESSION_SECRET（至少32字符随机值）；现有部署也可使用已加密保存的 GITHUB_OAUTH_SECRET 作为签名密钥，无需 OAuth 授权。
+Worker 加密密钥：LOGIN_PASSWORD（独立的至少 8 字符网站密码）、GITHUB_TOKEN（仅私有数据仓库 Contents 读写）、SESSION_SECRET（至少32字符随机值）；现有部署也可使用已加密保存的 GITHUB_OAUTH_SECRET 作为签名密钥，无需 OAuth 授权。
 
 LOGIN_RATE_LIMIT 为 Cloudflare 速率限制器，namespace_id=1001001，limit=5，period=60，以连接 IP 为键；缺少绑定时拒绝登录。此限制按 Cloudflare 边缘位置执行，并非全球账号锁定。使用强且不重复的密码。
 
