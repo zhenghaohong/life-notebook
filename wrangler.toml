@@ -1,0 +1,15 @@
+name = "life-notebook-api"
+main = "worker/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = false
+# Uncomment after setting your domain:
+# routes = [{ pattern = "api.example.com", custom_domain = true }]
+[vars]
+FRONTEND_ORIGIN = "https://app.example.com"
+ACCESS_TEAM_DOMAIN = "your-team.cloudflareaccess.com"
+ACCESS_AUD = "replace-with-access-application-aud"
+ALLOWED_EMAIL = "you@example.com"
+GITHUB_OWNER = "zhenghaohong"
+GITHUB_REPO = "life-private-data"
+GITHUB_BRANCH = "main"
+
