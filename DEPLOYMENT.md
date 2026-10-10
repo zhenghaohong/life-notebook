@@ -21,3 +21,6 @@ GitHub Token 到期后需要替换后台 GITHUB_TOKEN，网站重新登录不会
 上线仍需用户保存 LOGIN_PASSWORD，并完成真实登录与私有仓库读写验证。
 
 参考：https://developers.cloudflare.com/workers/runtime-apis/bindings/rate-limit/
+
+## 记住登录
+勾选后签发 7 天登录凭证，保存在前端路径范围的 Secure、SameSite=Lax Cookie；不保存明文密码。未勾选有效期 30 分钟，仅保存在内存。恢复登录前后台验证凭证，退出登录清除当前浏览器 Cookie。跨站前端无法设置 HttpOnly Cookie，所以凭证可由本网站脚本读取，应保护前端免受 XSS；密码仍仅保存在后台。退出清除本地会话，但已复制的凭证到期前仍有效。
