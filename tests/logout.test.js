@@ -1,0 +1,26 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import { readFileSync } from 'node:fs';
+test('settings has one account action; logout clears remembered session and private data', async () => {
+ const elements=new Map();const get=s=>{if(!elements.has(s))elements.set(s,{value:'',textContent:'',innerHTML:''});return elements.get(s);};
+ const document={cookie:'',querySelector:get};
+ const location={href:'https://example.test/life-notebook/',hash:'#settings'};
+ const context=vm.createContext({document,location,window:{APP_CONFIG:{demo:false,apiBase:'https://api.test'},addEventListener(){}},history:{replaceState(a,b,url){location.hash=url;}},URL,Intl,Date,console,confirm:()=>true});
+ const source=readFileSync(new URL('../web/app.js',import.meta.url),'utf8').replace('restoreSession().then(()=>load());','');
+ vm.runInContext(source,context);
+ await vm.runInContext("page='settings';render()",context);
+ assert.match(get('#content').innerHTML,/账号密码登录/);
+ assert.doesNotMatch(get('#content').innerHTML,/id="logout"|重新认证/);
+ await vm.runInContext("sessionToken='test';sessionExpires=Date.now()/1000+1000;sessionEmail='owner';cost.data=[{note:'private'}];loadedDate=date;render()",context);
+ assert.match(get('#content').innerHTML,/id="logout"/);
+ assert.doesNotMatch(get('#content').innerHTML,/id="login"|重新认证/);
+ vm.runInContext('signOut()',context);
+ assert.match(document.cookie,/Max-Age=0/);
+ assert.equal(location.hash,'#home');
+ assert.equal(vm.runInContext('loggedIn()',context),false);
+ assert.equal(vm.runInContext('cost.data.length',context),0);
+ assert.equal(vm.runInContext('loadedDate',context),'');
+ assert.match(get('#content').innerHTML,/账号密码登录/);
+ assert.doesNotMatch(get('#content').innerHTML,/private/);
+});
