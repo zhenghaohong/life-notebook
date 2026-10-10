@@ -1,4 +1,4 @@
-import {HttpError,verifyAccess,verifySession,loginResponse,githubLogin,githubCallback} from './auth.js';
+import {HttpError,verifyAccess,verifySession,loginResponse,githubLogin,githubCallback,passwordLogin} from './auth.js';
 import {defaults,filePath,validate,encodeDiary,decodeDiary} from './model.js';
 
 function encode(text){const bytes=new TextEncoder().encode(text);let s='';for(const b of bytes)s+=String.fromCharCode(b);return btoa(s);}
@@ -8,11 +8,12 @@ async function read(env,path,kind){const f=await github(env,path);if(!f)return {
 export default {async fetch(request,env){const origin=request.headers.get('Origin');const headers={'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Vary':'Origin'};if(origin===env.FRONTEND_ORIGIN){headers['Access-Control-Allow-Origin']=origin;headers['Access-Control-Allow-Credentials']='true';}const respond=(data,status=200)=>new Response(JSON.stringify(data),{status,headers});try{
  const u=new URL(request.url);
  if(origin&&origin!==env.FRONTEND_ORIGIN)throw new HttpError(403,'来源不允许');
- if(request.method==='OPTIONS'){return new Response(null,{status:204,headers:{...headers,'Access-Control-Allow-Methods':'GET, PUT, OPTIONS','Access-Control-Allow-Headers':'Content-Type, Authorization'}});}
- if(env.AUTH_MODE!=='github'&&(!env.ACCESS_TEAM_DOMAIN||!env.ACCESS_AUD||!env.ALLOWED_EMAIL||!env.GITHUB_TOKEN))throw new HttpError(503,'服务端尚未配置完成');
+ if(request.method==='OPTIONS'){return new Response(null,{status:204,headers:{...headers,'Access-Control-Allow-Methods':'GET, PUT, POST, OPTIONS','Access-Control-Allow-Headers':'Content-Type, Authorization'}});}
+ if(!['github','password'].includes(env.AUTH_MODE)&&(!env.ACCESS_TEAM_DOMAIN||!env.ACCESS_AUD||!env.ALLOWED_EMAIL||!env.GITHUB_TOKEN))throw new HttpError(503,'服务端尚未配置完成');
+ if(u.pathname==='/api/login'&&request.method==='POST'&&env.AUTH_MODE==='password')return respond(await passwordLogin(request,env));
  if(u.pathname==='/callback'&&request.method==='GET'&&env.AUTH_MODE==='github')return await githubCallback(request,env);
  if(u.pathname==='/login'&&request.method==='GET'){if(env.AUTH_MODE==='github')return await githubLogin(request,env);if(env.AUTH_MODE==='session')return await loginResponse(request,env);await verifyAccess(request,env);return Response.redirect(env.FRONTEND_ORIGIN,302);}
- const payload=['session','github'].includes(env.AUTH_MODE)?await verifySession(request,env):await verifyAccess(request,env);
+ const payload=['session','github','password'].includes(env.AUTH_MODE)?await verifySession(request,env):await verifyAccess(request,env);
  if(u.pathname==='/api/me'&&request.method==='GET')return respond({email:payload.email,login:payload.login});
  const match=u.pathname.match(/^\/api\/(cost|daily|tags)$/);if(!match)throw new HttpError(404,'接口不存在');const kind=match[1];let path;try{path=kind==='tags'?'settings/tags.json':filePath(kind,u.searchParams.get('date')||'');}catch{throw new HttpError(400,'日期无效');}
  if(request.method==='GET')return respond(await read(env,path,kind));

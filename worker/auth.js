@@ -4,6 +4,10 @@ export class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
 function checkEmail(payload, env) {
+  if (env.AUTH_MODE === 'password') {
+    if (payload.login !== env.LOGIN_USERNAME) throw new HttpError(403, '该账号无权访问');
+    return payload;
+  }
   if (env.AUTH_MODE === 'github') {
     if (typeof payload.login !== 'string' || payload.login.toLowerCase() !== env.ALLOWED_GITHUB_LOGIN?.toLowerCase()) throw new HttpError(403, '该 GitHub 账号无权访问');
     return payload;
@@ -24,9 +28,28 @@ export async function verifyAccess(request, env) {
   return checkEmail(payload, env);
 }
 function secret(env) {
-  const value = env.SESSION_SECRET || (env.AUTH_MODE === 'github' ? env.GITHUB_OAUTH_SECRET : '');
+  const value = env.SESSION_SECRET || (['github','password'].includes(env.AUTH_MODE) ? env.GITHUB_OAUTH_SECRET : '');
   if (!value || value.length < 32) throw new HttpError(503, '会话密钥尚未配置');
   return new TextEncoder().encode(value);
+}
+export async function passwordLogin(request, env) {
+  if (!env.LOGIN_USERNAME || !env.LOGIN_PASSWORD || env.LOGIN_PASSWORD.length < 16 || !env.LOGIN_RATE_LIMIT) throw new HttpError(503, '账号登录尚未配置完成');
+  if (request.headers.get('Origin') !== env.FRONTEND_ORIGIN || !request.headers.get('Content-Type')?.startsWith('application/json')) throw new HttpError(403, '登录来源无效');
+  const limited = await env.LOGIN_RATE_LIMIT.limit({key:'login:'+(request.headers.get('CF-Connecting-IP') || 'unknown')});
+  if (!limited.success) throw new HttpError(429, '尝试过于频繁，请一分钟后重试');
+  const raw = await request.text();
+  if (raw.length > 2048) throw new HttpError(413, '登录请求过大');
+  let body; try {body=JSON.parse(raw);} catch {throw new HttpError(400, '登录格式无效');}
+  if (typeof body.username !== 'string' || typeof body.password !== 'string' || body.password.length > 512) throw new HttpError(400, '请输入用户名和密码');
+  const digest = async value => new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value)));
+  const [given,expected] = await Promise.all([digest(body.password),digest(env.LOGIN_PASSWORD)]);
+  let diff=0; for(let i=0;i<given.length;i++)diff |= given[i]^expected[i];
+  if (diff || body.username !== env.LOGIN_USERNAME) throw new HttpError(401, '用户名或密码错误');
+  const expiresAt = Math.floor(Date.now()/1000)+1800;
+  const token = await new SignJWT({login:env.LOGIN_USERNAME,purpose:'notebook-session'})
+    .setProtectedHeader({alg:'HS256'}).setIssuer(new URL(request.url).origin).setAudience(env.FRONTEND_ORIGIN)
+    .setSubject(env.LOGIN_USERNAME).setIssuedAt().setExpirationTime(expiresAt).sign(secret(env));
+  return {token,expiresAt,login:env.LOGIN_USERNAME};
 }
 export async function verifySession(request, env) {
   const key = secret(env);
