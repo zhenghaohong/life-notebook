@@ -10,17 +10,21 @@ $('#date').value=date;
 function loggedIn(){return Boolean(sessionToken && sessionExpires>Date.now()/1000);}
 function startLogin(){
  if(!cfg.apiBase){status('后台地址尚未配置');return;}
- loginState=crypto.randomUUID();
- loginWindow=window.open(cfg.apiBase+'/login?state='+encodeURIComponent(loginState),'life-notebook-login','popup,width=480,height=680');
- if(!loginWindow)status('请允许弹出窗口，然后重新点击登录');
- else status('请在登录窗口中完成 GitHub 登录');
+ const box=document.createElement('div');box.className='card settings';
+ box.innerHTML='<h2>登录日常</h2><form id="account-login"><label>用户名<input name="username" autocomplete="username" required maxlength="100"></label><label>密码<input name="password" type="password" autocomplete="current-password" required maxlength="512"></label><div class="actions"><button type="submit">登录</button><button type="button" id="login-cancel" class="secondary">取消</button></div></form>';
+ $('#status').replaceChildren(box);
+ $('#login-cancel').onclick=()=>status('');
+ $('#account-login').onsubmit=async event=>{
+  event.preventDefault();const form=event.currentTarget,button=form.querySelector('button[type="submit"]');button.disabled=true;
+  try{const data=new FormData(form);const response=await fetch(cfg.apiBase+'/api/login',{method:'POST',credentials:'omit',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:data.get('username'),password:data.get('password')})});
+   const result=await response.json();form.elements.password.value='';if(!response.ok)throw Error(result.error||'登录失败');
+   sessionToken=result.token;sessionExpires=result.expiresAt;
+   const me=await api('me');sessionEmail=me.login||me.email;
+   if(dirty){status('登录已恢复，请再次保存日记');nav();return;}
+   await load();status('已登录，数据同步到私有 GitHub 仓库');
+  }catch(error){status(error.message);sessionToken='';sessionExpires=0;}finally{button.disabled=false;}
+ };
 }
-window.addEventListener('message',async event=>{
- if(!cfg.apiBase || event.origin!==new URL(cfg.apiBase).origin || event.source!==loginWindow || event.data?.type!=='life-session' || event.data.state!==loginState || typeof event.data.token!=='string' || !Number.isFinite(event.data.expiresAt))return;
- loginState='';sessionToken=event.data.token;sessionExpires=event.data.expiresAt;
- try{const me=await api('me');sessionEmail=me.login||me.email;try{loginWindow.close();}catch{}if(dirty){status('登录已恢复，请再次保存日记');nav();return;}await load();status('已登录，数据同步到私有 GitHub 仓库');}
- catch(e){sessionToken='';sessionExpires=0;status(e.message);}
-});
 function signOut(){
  if(busy||!leave())return;
  sessionToken='';sessionExpires=0;sessionEmail='';loadedDate='';dirty=false;version++;
@@ -29,13 +33,13 @@ function signOut(){
 }
 function status(s){$('#status').textContent=s;}
 function demoRead(kind,d){const key=`life-demo:${kind}:${d||''}`;const raw=localStorage.getItem(key);return raw?JSON.parse(raw):{data:kind==='cost'?[]:kind==='daily'?{zh:'',en:''}:['餐饮','交通','购物','生活','其他'],sha:null};}
-async function api(kind,d,body){if(cfg.demo){const current=demoRead(kind,d);if(body){if(current.sha!==body.sha)throw Error('另一页面已修改，请重新加载');const next={data:body.data,sha:crypto.randomUUID()};localStorage.setItem(`life-demo:${kind}:${d||''}`,JSON.stringify(next));return next;}return current;}if(!cfg.apiBase)throw Error('请先在 config.js 配置 API 地址');if(!loggedIn())throw Error('请先登录');let r;try{r=await fetch(`${cfg.apiBase}/api/${kind}${d?'?date='+d:''}`,{credentials:'omit',method:body?'PUT':'GET',headers:{Authorization:'Bearer '+sessionToken,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});}catch{throw Error('连接失败或登录已过期，请前往设置重新登录');}let json;try{json=await r.json();}catch{throw Error('请前往设置登录 Cloudflare Access');}if(!r.ok)throw Error(json.error||'请求失败');return json;}
+async function api(kind,d,body){if(cfg.demo){const current=demoRead(kind,d);if(body){if(current.sha!==body.sha)throw Error('另一页面已修改，请重新加载');const next={data:body.data,sha:crypto.randomUUID()};localStorage.setItem(`life-demo:${kind}:${d||''}`,JSON.stringify(next));return next;}return current;}if(!cfg.apiBase)throw Error('请先在 config.js 配置 API 地址');if(!loggedIn())throw Error('请先登录');let r;try{r=await fetch(`${cfg.apiBase}/api/${kind}${d?'?date='+d:''}`,{credentials:'omit',method:body?'PUT':'GET',headers:{Authorization:'Bearer '+sessionToken,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});}catch{throw Error('连接失败或登录已过期，请前往设置重新登录');}let json;try{json=await r.json();}catch{throw Error('登录服务响应无效，请重新登录');}if(!r.ok)throw Error(json.error||'请求失败');return json;}
 function rows(items,editable=false){return items.length?items.slice().sort((a,b)=>b.time.localeCompare(a.time)).map(x=>`<div class="row"><div><span class="pill">${esc(x.tag)}</span><small>${esc(x.time)} · ${esc(x.note||'没有备注')}</small></div><div class="amount">${money(x.amountCents)}</div>${editable?`<div class="row-actions"><button class="secondary" data-edit="${esc(x.id)}">编辑</button><button class="danger" data-delete="${esc(x.id)}">删除</button></div>`:''}</div>`).join(''):'<div class="empty">还没有支出记录<br>从今天的第一笔开始。</div>';}
 function nav(){ $('nav').innerHTML=pages.map(([id,icon,label])=>`<a href="#${id}" ${id===page?'class="active" aria-current="page"':''}><span aria-hidden="true">${icon}</span>${label}</a>`).join('');$('#title').textContent=pages.find(x=>x[0]===page)[2];$('#mode').textContent=cfg.demo?'本地演示 · 数据仅在当前浏览器':loggedIn()?'私人空间 · GitHub 文件存储':'私人空间 · 请先登录';}
 function stats(items,diary){return `<div class="stats"><div class="card"><div class="stat-label">当日支出</div><div class="number">${money(sum(items))}</div></div><div class="card"><div class="stat-label">支出笔数</div><div class="number">${items.length}<span class="muted"> 笔</span></div></div><div class="card"><div class="stat-label">日记状态</div><div class="number">${diary.zh||diary.en?'已记录':'待记录'}</div></div></div>`;}
 async function load(){const v=++version;nav();if(!cfg.demo&&!loggedIn()){
  if(page==='settings'){await render(v);return;}
- $('#content').innerHTML='<div class="card settings"><h2>欢迎回到日常</h2><p>登录后查看你的账单和日记。数据保存在 GitHub 私有仓库。</p><button id="login">GitHub 登录</button><p class="muted">登录仅在当前页面有效，刷新后可重新验证。演示记录仍保留在原浏览器。</p></div>';$('#login').onclick=startLogin;return;
+ $('#content').innerHTML='<div class="card settings"><h2>欢迎回到日常</h2><p>登录后查看你的账单和日记。数据保存在 GitHub 私有仓库。</p><button id="login">账号密码登录</button><p class="muted">登录仅在当前页面有效，刷新后可重新验证。演示记录仍保留在原浏览器。</p></div>';$('#login').onclick=startLogin;return;
  }$('#content').innerHTML='<div class="empty">正在读取你的日常…</div>';status('');try{const [c,d,t]=await Promise.all([api('cost',date),api('daily',date),api('tags')]);if(v!==version)return;cost=c;daily=d;tags=t;loadedDate=date;dirty=false;await render(v);}catch(e){if(v===version){$('#content').innerHTML='<div class="card"><h2>暂时无法读取</h2><p>请检查连接，或前往设置登录。</p><div class="actions"><button id="retry">重新加载</button><a href="#settings">设置</a></div></div>';$('#retry').onclick=load;status(e.message);if(page==='settings')render(v);}}}
 async function render(v=version){nav();const out=$('#content');if(page==='home'){out.innerHTML=`<div class="hero"><div class="eyebrow">A LITTLE MOMENT FOR YOURSELF</div><h2>让日常，有迹可循。</h2><p>记下一笔支出，留住一个念头。<br>生活的细节，都在这里。</p><div class="actions"><button id="add">＋ 记录支出</button><a href="#daily"><button class="secondary">写日记</button></a></div></div>${stats(cost.data,daily.data)}<div class="grid"><div class="card"><div class="toolbar"><h2>今天的支出</h2><a href="#cost">查看全部 →</a></div>${rows(cost.data.slice(-4))}</div><div class="card"><h2>今天的片刻</h2><div class="note-preview">${esc(daily.data.zh||daily.data.en||'还没有写下今天。给自己留几句话吧。')}</div><div class="actions"><a href="#daily">继续书写 →</a></div></div></div>`;$('#add').onclick=()=>edit();}
 if(page==='cost'){out.innerHTML=`${stats(cost.data,daily.data)}<div class="card"><div class="toolbar"><h2>支出明细</h2><button id="add">＋ 记录一笔</button></div>${rows(cost.data,true)}</div>`;$('#add').onclick=()=>edit();out.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>edit(cost.data.find(x=>x.id===b.dataset.edit)));out.querySelectorAll('[data-delete]').forEach(b=>b.onclick=async()=>{if(confirm('删除这笔支出？'))await saveCost(cost.data.filter(x=>x.id!==b.dataset.delete));});}
