@@ -23,5 +23,9 @@ test('remember choice grants thirty days only for boolean true; ordinary login s
 
 test('configuration errors identify missing and short password without revealing it',async()=>{
  const missing=await login({}, {LOGIN_PASSWORD:''});assert.equal(missing.status,503);assert.match((await missing.json()).error,/LOGIN_PASSWORD/);
- const short=await login({}, {LOGIN_PASSWORD:'short'});assert.equal(short.status,503);assert.match((await short.json()).error,/16/);
+ const short=await login({}, {LOGIN_PASSWORD:'short'});assert.equal(short.status,503);assert.match((await short.json()).error,/8/);
+});
+
+test('eight-character configured password authenticates',async()=>{
+ const response=await login({username:env.LOGIN_USERNAME,password:'Test!234'},{LOGIN_PASSWORD:'Test!234'});assert.equal(response.status,200);
 });
