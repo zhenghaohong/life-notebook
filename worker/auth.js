@@ -45,7 +45,7 @@ export async function passwordLogin(request, env) {
   const [given,expected] = await Promise.all([digest(body.password),digest(env.LOGIN_PASSWORD)]);
   let diff=0; for(let i=0;i<given.length;i++)diff |= given[i]^expected[i];
   if (diff || body.username !== env.LOGIN_USERNAME) throw new HttpError(401, '用户名或密码错误');
-  const expiresAt = Math.floor(Date.now()/1000)+1800;
+  const expiresAt = Math.floor(Date.now()/1000)+(body.remember === true ? 7*24*3600 : 1800);
   const token = await new SignJWT({login:env.LOGIN_USERNAME,purpose:'notebook-session'})
     .setProtectedHeader({alg:'HS256'}).setIssuer(new URL(request.url).origin).setAudience(env.FRONTEND_ORIGIN)
     .setSubject(env.LOGIN_USERNAME).setIssuedAt().setExpirationTime(expiresAt).sign(secret(env));
@@ -58,7 +58,7 @@ export async function verifySession(request, env) {
   let payload;
   try {
     ({payload} = await jwtVerify(token, key, {
-      issuer: new URL(request.url).origin, audience: env.FRONTEND_ORIGIN, algorithms: ['HS256'], maxTokenAge: '30m'
+      issuer: new URL(request.url).origin, audience: env.FRONTEND_ORIGIN, algorithms: ['HS256'], maxTokenAge: env.AUTH_MODE === 'password' ? '7d' : '30m'
     }));
     if (payload.purpose !== 'notebook-session') throw new Error('wrong purpose');
   } catch { throw new HttpError(401, '登录已过期，请重新登录'); }
