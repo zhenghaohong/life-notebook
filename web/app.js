@@ -1,4 +1,5 @@
 const $=s=>document.querySelector(s), cfg=window.APP_CONFIG;
+if(cfg.migratedTo)location.replace(cfg.migratedTo+location.hash);
 const pages=[['home','⌂','首页'],['cost','¥','Cost'],['daily','✎','Daily'],['history','◷','历史'],['monthly','▥','月度'],['tags','♧','标签'],['settings','⚙','设置']];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
