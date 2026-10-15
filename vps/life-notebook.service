@@ -1,0 +1,24 @@
+[Unit]
+Description=Life Notebook SQLite application
+After=network.target
+
+[Service]
+Type=simple
+User=life-notebook
+Group=life-notebook
+WorkingDirectory=/opt/life-notebook
+EnvironmentFile=/etc/life-notebook.env
+ExecStart=/usr/bin/python3 /opt/life-notebook/server.py
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/life-notebook
+MemoryMax=256M
+CPUQuota=25%
+
+[Install]
+WantedBy=multi-user.target

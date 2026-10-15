@@ -1,0 +1,10 @@
+[Unit]
+Description=Nightly Life Notebook backup at 23:55 Asia/Shanghai
+
+[Timer]
+OnCalendar=*-*-* 23:55:00 Asia/Shanghai
+Persistent=true
+Unit=life-notebook-backup.service
+
+[Install]
+WantedBy=timers.target

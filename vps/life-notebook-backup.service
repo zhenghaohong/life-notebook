@@ -1,0 +1,21 @@
+[Unit]
+Description=Life Notebook nightly private GitHub backup
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=life-notebook
+Group=life-notebook
+WorkingDirectory=/opt/life-notebook
+EnvironmentFile=/etc/life-notebook.env
+ExecStart=/usr/bin/python3 /opt/life-notebook/backup.py
+Restart=on-failure
+RestartSec=900
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/life-notebook
+MemoryMax=256M
+CPUQuota=20%
