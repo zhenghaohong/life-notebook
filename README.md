@@ -1,3 +1,11 @@
+# 当前部署：VPS + SQLite
+
+网站：https://life.trouvaille.ccwu.cc/
+
+日常数据保存在 VPS 的 SQLite 数据库，每晚北京时间 23:55 导出 JSON、Markdown 并备份到 GitHub 私有仓库。新版本源码与运维说明见 [vps/README.md](vps/README.md)。原 GitHub Pages 入口会跳转至新网址；下方为早期部署资料。
+
+---
+
 # 日常 · Life Notebook
 
 > 当前线上配置采用网站用户名密码登录，部署与使用说明请以 [DEPLOYMENT.md](DEPLOYMENT.md) 为准。下方同域 Cloudflare Access 部署段落仅保留为早期方案。
