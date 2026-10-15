@@ -15,6 +15,7 @@ export default {async fetch(request,env){const origin=request.headers.get('Origi
  if(u.pathname==='/login'&&request.method==='GET'){if(env.AUTH_MODE==='github')return await githubLogin(request,env);if(env.AUTH_MODE==='session')return await loginResponse(request,env);await verifyAccess(request,env);return Response.redirect(env.FRONTEND_ORIGIN,302);}
  const payload=['session','github','password'].includes(env.AUTH_MODE)?await verifySession(request,env):await verifyAccess(request,env);
  if(u.pathname==='/api/me'&&request.method==='GET')return respond({email:payload.email,login:payload.login});
+ if(env.MIGRATED_TO&&request.method==='PUT')throw new HttpError(409,'网站已迁移，请访问 '+env.MIGRATED_TO+' 保存数据');
  const match=u.pathname.match(/^\/api\/(cost|daily|tags)$/);if(!match)throw new HttpError(404,'接口不存在');const kind=match[1];let path;try{path=kind==='tags'?'settings/tags.json':filePath(kind,u.searchParams.get('date')||'');}catch{throw new HttpError(400,'日期无效');}
  if(request.method==='GET')return respond(await read(env,path,kind));
  if(request.method!=='PUT')throw new HttpError(405,'方法不允许');
