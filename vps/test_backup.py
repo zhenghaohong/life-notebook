@@ -24,7 +24,28 @@ class BackupTest(unittest.TestCase):
                 if args[0]=='status':return 'M cost'
                 return ''
             backup.DATA=data;backup.REPO=data/'github-backup';backup.git=fake_git
-            try:backup.run()
+            try:
+                backup.run()
+                snapshot_time=(data/'export-snapshot.sqlite3').stat().st_mtime_ns
+                calls.clear()
+                # Logins and saving identical business data must not trigger a backup.
+                with store.connect() as db:
+                    db.execute('UPDATE sessions SET expires=expires+1')
+                cost=store.read('cost','2026-10-15')
+                store.write('cost','2026-10-15',cost['data'],cost['sha'])
+                backup.run()
+                self.assertEqual(calls,[])
+                self.assertEqual((data/'export-snapshot.sqlite3').stat().st_mtime_ns,snapshot_time)
+                self.assertIn(marker,(data/'notebook.sqlite3').read_bytes())
+                diary=store.read('daily','2026-10-15')
+                store.write('daily','2026-10-15',{'zh':'changed','en':''},diary['sha'])
+                backup.run()
+                self.assertIn(('push','origin','HEAD:main'),calls)
+                calls.clear()
+                # Simulate a process interrupted after beginning a backup.
+                backup.state(store,'pending','1')
+                backup.run()
+                self.assertIn(('push','origin','HEAD:main'),calls)
             finally:backup.DATA,backup.REPO,backup.git=original
             snapshot=data/'github-backup/database/notebook-data.sqlite3'
             self.assertNotIn(marker,snapshot.read_bytes())

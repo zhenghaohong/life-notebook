@@ -1,5 +1,5 @@
 """Nightly SQLite snapshot + JSON/Markdown export into a private Git repository."""
-import datetime, fcntl, hashlib, os, sqlite3, subprocess, time
+import datetime, fcntl, hashlib, json, os, sqlite3, subprocess
 from pathlib import Path
 from store import Store
 
@@ -15,6 +15,21 @@ def state(store,key,value):
     with store.connect() as db:
         db.execute('INSERT INTO metadata VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',('backup_'+key,value))
 
+def fingerprint(store):
+    """Hash business data only; login, revisions and backup timestamps do not count."""
+    digest=hashlib.sha256()
+    with store.connect() as db:
+        db.execute('BEGIN')
+        for name,query in [
+            ('cost','SELECT date,id,amountCents,tag,note,time FROM expenses ORDER BY date,id'),
+            ('daily','SELECT date,zh,en FROM diaries ORDER BY date'),
+            ('tags','SELECT position,name FROM tags ORDER BY position'),
+        ]:
+            digest.update(name.encode()+b'\n')
+            for row in db.execute(query):
+                digest.update(json.dumps(tuple(row),ensure_ascii=False,separators=(',',':')).encode()+b'\n')
+    return digest.hexdigest()
+
 def run():
     os.umask(0o077)
     DATA.mkdir(parents=True,exist_ok=True)
@@ -22,11 +37,21 @@ def run():
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         store=Store(DATA/'notebook.sqlite3')
         now=datetime.datetime.now(datetime.timezone.utc).isoformat()
-        state(store,'attempt',now)
         try:
             with store.connect() as db:
                 if not db.execute("SELECT 1 FROM metadata WHERE key='migration_complete'").fetchone():
                     raise RuntimeError('Data migration not complete; refusing backup')
+                previous=dict(db.execute("SELECT key,value FROM metadata WHERE key LIKE 'backup_%'"))
+            current=fingerprint(store)
+            if (previous.get('backup_fingerprint')==current and
+                previous.get('backup_pending')!='1' and not previous.get('backup_error') and REPO.exists()):
+                state(store,'skipped',now)
+                print('No data changes; export and GitHub sync skipped')
+                return
+            state(store,'attempt',now)
+            # Persist before network/export work. An interrupted or failed push must
+            # be retried even when the user subsequently reverts their edits.
+            state(store,'pending','1')
             if not REPO.exists():
                 git('clone','--branch','main','git@github.com:zhenghaohong/life-private-data.git',str(REPO))
             git('fetch','origin','main')
@@ -49,6 +74,7 @@ def run():
             with sqlite3.connect(snapshot) as clean:
                 clean.execute('VACUUM')
             export_store=Store(snapshot)
+            exported_fingerprint=fingerprint(export_store)
             export_store.export_tree(REPO)
             # Full data database backup supplements human-readable exported files.
             dest=REPO/'database/notebook-data.sqlite3'
@@ -62,8 +88,10 @@ def run():
             if git('status','--porcelain'):
                 git('commit','-m','Nightly SQLite data backup '+now)
             git('push','origin','HEAD:main')
-            state(store,'success',now)
-            state(store,'error','')
+            with store.connect() as db:
+                db.executemany('INSERT INTO metadata VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',[
+                    ('backup_success',now),('backup_error',''),
+                    ('backup_fingerprint',exported_fingerprint),('backup_pending','0')])
             print('Backup completed successfully')
         except Exception as exc:
             # No stderr from SSH/Git (which may contain private paths) in UI state.
