@@ -93,7 +93,7 @@ class Handler(BaseHTTPRequestHandler):
         if not path.startswith('/api/'):
             if self.command!='GET':raise HTTPError(405,'方法不允许')
             name='index.html' if path=='/' else path.lstrip('/')
-            if name not in ['index.html','app.js','style.css','config.js']:raise HTTPError(404,'页面不存在')
+            if name not in ['index.html','app.js','style.css','config.js','reminders.js']:raise HTTPError(404,'页面不存在')
             payload=(ROOT/'web'/name).read_bytes()
             self.send_response(200);self.send_header('Content-Type',mimetypes.guess_type(name)[0]+'; charset=utf-8')
             self.send_header('Content-Length',str(len(payload)));self.send_header('Cache-Control','no-cache')
@@ -115,8 +115,8 @@ class Handler(BaseHTTPRequestHandler):
         date=urllib.parse.parse_qs(url.query).get('date',[''])[0]
         if path=='/api/month' and self.command=='GET':self.reply(200,STORE.month(date));return
         kind=path.removeprefix('/api/')
-        if kind not in ['cost','daily','tags']:raise HTTPError(404,'接口不存在')
-        if kind=='tags':date=''
+        if kind not in ['cost','daily','tags','reminders']:raise HTTPError(404,'接口不存在')
+        if kind in ['tags','reminders']:date=''
         elif not valid_date(date):raise HTTPError(400,'日期无效')
         if self.command=='GET':self.reply(200,STORE.read(kind,date));return
         if self.command=='PUT':

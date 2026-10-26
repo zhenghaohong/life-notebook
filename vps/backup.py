@@ -24,6 +24,7 @@ def fingerprint(store):
             ('cost','SELECT date,id,amountCents,tag,note,time FROM expenses ORDER BY date,id'),
             ('daily','SELECT date,zh,en FROM diaries ORDER BY date'),
             ('tags','SELECT position,name FROM tags ORDER BY position'),
+            ('reminders','SELECT id,title,due_date,note,completed FROM reminders ORDER BY id'),
         ]:
             digest.update(name.encode()+b'\n')
             for row in db.execute(query):

@@ -38,6 +38,18 @@ def validate(kind, data):
     elif kind == 'tags':
         if not isinstance(data, list) or len(data) > 100 or any(not isinstance(x,str) or not x.strip() or len(x)>40 for x in data) or len(set(data)) != len(data):
             raise ValueError('标签无效')
+    elif kind == 'reminders':
+        if not isinstance(data,list) or len(data)>2000:
+            raise ValueError('备忘事项最多保存 2000 项')
+        ids=set()
+        for x in data:
+            if not isinstance(x,dict) or not isinstance(x.get('id'),str) or not re.fullmatch(r'[a-zA-Z0-9-]{1,80}',x['id']) or x['id'] in ids:
+                raise ValueError('备忘事项 ID 无效')
+            ids.add(x['id'])
+            if not isinstance(x.get('title'),str) or not x['title'].strip() or len(x['title'])>120:
+                raise ValueError('事项名称不能为空，最多 120 字')
+            if not valid_date(x.get('dueDate')) or not isinstance(x.get('note'),str) or len(x['note'])>2000 or type(x.get('completed')) is not bool:
+                raise ValueError('备忘事项日期或内容无效')
     else:
         raise ValueError('类型无效')
     return data
@@ -58,6 +70,7 @@ class Store:
                 CREATE TABLE IF NOT EXISTS sessions(digest TEXT PRIMARY KEY,username TEXT NOT NULL,expires INTEGER NOT NULL);
                 CREATE TABLE IF NOT EXISTS login_attempts(ip TEXT PRIMARY KEY,window INTEGER NOT NULL,count INTEGER NOT NULL);
                 CREATE TABLE IF NOT EXISTS metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS reminders(id TEXT PRIMARY KEY,title TEXT NOT NULL,due_date TEXT NOT NULL,note TEXT NOT NULL,completed INTEGER NOT NULL CHECK(completed IN (0,1)));
             ''')
             if not db.execute("SELECT 1 FROM revisions WHERE kind='tags'").fetchone():
                 db.executemany('INSERT INTO tags VALUES (?,?)', enumerate(DEFAULT_TAGS))
@@ -84,13 +97,15 @@ class Store:
         elif kind == 'daily':
             row = db.execute('SELECT zh,en FROM diaries WHERE date=?',(date,)).fetchone()
             data = dict(row) if row else {'zh':'','en':''}
+        elif kind == 'reminders':
+            data=[{**dict(x),'completed':bool(x['completed'])} for x in db.execute('SELECT id,title,due_date AS dueDate,note,completed FROM reminders ORDER BY due_date,id')]
         else:
             data = [x[0] for x in db.execute('SELECT name FROM tags ORDER BY position')]
         return {'data':data,'sha':str(rev[0]) if rev else None}
 
     def write(self,kind,date,data,revision):
         validate(kind,data)
-        if kind != 'tags' and not valid_date(date):
+        if kind not in ('tags','reminders') and not valid_date(date):
             raise ValueError('日期无效')
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
@@ -102,6 +117,9 @@ class Store:
                 db.executemany('INSERT INTO expenses VALUES (?,?,?,?,?,?)',[(date,x['id'],x['amountCents'],x['tag'],x['note'],x['time']) for x in data])
             elif kind == 'daily':
                 db.execute('INSERT INTO diaries VALUES (?,?,?) ON CONFLICT(date) DO UPDATE SET zh=excluded.zh,en=excluded.en',(date,data['zh'],data['en']))
+            elif kind == 'reminders':
+                db.execute('DELETE FROM reminders')
+                db.executemany('INSERT INTO reminders VALUES (?,?,?,?,?)',[(x['id'],x['title'],x['dueDate'],x['note'],int(x['completed'])) for x in data])
             else:
                 db.execute('DELETE FROM tags')
                 db.executemany('INSERT INTO tags VALUES (?,?)',enumerate(data))
@@ -143,6 +161,9 @@ class Store:
         p=root/'settings/tags.json'
         if p.exists():
             self.write('tags','',json.loads(p.read_text(encoding='utf-8')),self.read('tags')['sha'])
+        p=root/'settings/reminders.json'
+        if p.exists():
+            self.write('reminders','',json.loads(p.read_text(encoding='utf-8')),None)
         with self.connect() as db:
             db.execute("INSERT INTO metadata VALUES ('migration_complete',?)",(str(count),))
         return count
@@ -152,7 +173,7 @@ class Store:
         # All exports use one read transaction, so daily data and tags form a consistent snapshot.
         with self.connect() as db:
             db.execute('BEGIN')
-            for kind,date in db.execute("SELECT kind,date FROM revisions WHERE kind!='tags'"):
+            for kind,date in db.execute("SELECT kind,date FROM revisions WHERE kind IN ('cost','daily')"):
                 data=self.read(kind,date,db)['data']
                 p=root/kind/date[:4]/date[5:7]/(date+('.json' if kind=='cost' else '.md'))
                 p.parent.mkdir(parents=True,exist_ok=True)
@@ -164,3 +185,5 @@ class Store:
             p=root/'settings/tags.json'
             p.parent.mkdir(parents=True,exist_ok=True)
             p.write_text(json.dumps(self.read('tags','',db)['data'],ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+            p=root/'settings/reminders.json'
+            p.write_text(json.dumps(self.read('reminders','',db)['data'],ensure_ascii=False,indent=2)+'\n',encoding='utf-8')

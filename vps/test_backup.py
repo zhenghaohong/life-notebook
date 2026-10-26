@@ -10,6 +10,8 @@ class BackupTest(unittest.TestCase):
             data=Path(tmp);store=Store(data/'notebook.sqlite3')
             store.write('cost','2026-10-15',[{'id':'a','amountCents':1250,'tag':'餐饮','note':'测试','time':'12:00'}],None)
             store.write('daily','2026-10-15',{'zh':'中文 Markdown','en':''},None)
+            reminder={'id':'task-1','title':'test','dueDate':'2026-10-15','note':'','completed':False}
+            store.write('reminders','',[reminder],None)
             marker=b'never-include-this-secret-marker'
             with store.connect() as db:
                 db.execute("INSERT INTO metadata VALUES ('migration_complete','2')")
@@ -36,6 +38,12 @@ class BackupTest(unittest.TestCase):
                 backup.run()
                 self.assertEqual(calls,[])
                 self.assertEqual((data/'export-snapshot.sqlite3').stat().st_mtime_ns,snapshot_time)
+                reminder['completed']=True
+                saved=store.read('reminders')
+                store.write('reminders','',[reminder],saved['sha'])
+                backup.run()
+                self.assertIn(('push','origin','HEAD:main'),calls)
+                calls.clear()
                 self.assertIn(marker,(data/'notebook.sqlite3').read_bytes())
                 diary=store.read('daily','2026-10-15')
                 store.write('daily','2026-10-15',{'zh':'changed','en':''},diary['sha'])
@@ -58,6 +66,7 @@ class BackupTest(unittest.TestCase):
             finally:db.close()
             self.assertTrue((data/'github-backup/cost/2026/10/2026-10-15.json').exists())
             self.assertTrue((data/'github-backup/daily/2026/10/2026-10-15.md').exists())
+            self.assertTrue((data/'github-backup/settings/reminders.json').exists())
             self.assertIn(('push','origin','HEAD:main'),calls)
 
 if __name__=='__main__':unittest.main()

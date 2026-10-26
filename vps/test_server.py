@@ -31,6 +31,15 @@ class NotebookTest(unittest.TestCase):
         self.assertEqual(code,200)
         self.assertIn('HttpOnly',headers['Set-Cookie']);self.assertIn('Max-Age=2592000',headers['Set-Cookie'])
         cookie=headers['Set-Cookie'].split(';')[0]
+        reminder={'id':'task-1','title':'服务器续费','dueDate':'2026-10-15','note':'','completed':False}
+        self.assertEqual(self.request('GET','/api/reminders')[0],401)
+        self.assertEqual(self.request('PUT','/api/reminders',{'sha':None,'data':[reminder]},cookie,origin='https://evil.test')[0],403)
+        code,saved_reminders,_=self.request('PUT','/api/reminders',{'sha':None,'data':[reminder]},cookie)
+        self.assertEqual(code,200)
+        self.assertEqual(self.request('GET','/api/reminders?date=2026-12-31',cookie=cookie)[1]['data'],[reminder])
+        self.assertEqual(self.request('PUT','/api/reminders',{'sha':None,'data':[]},cookie)[0],409)
+        reminder['completed']=True
+        self.assertEqual(self.request('PUT','/api/reminders',{'sha':saved_reminders['sha'],'data':[reminder]},cookie)[0],200)
         item={'id':'one','amountCents':1234,'tag':'餐饮','note':'测试','time':'12:00'}
         self.assertEqual(self.request('PUT','/api/cost?date=2026-10-15',{'sha':None,'data':[item]},cookie,origin='https://evil.test')[0],403)
         code,saved,_=self.request('PUT','/api/cost?date=2026-10-15',{'sha':None,'data':[item]},cookie)

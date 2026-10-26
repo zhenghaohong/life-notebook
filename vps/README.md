@@ -63,3 +63,13 @@ node --check vps/web/app.js
 Stop only `life-notebook`, `life-notebook-web` and `life-notebook-backup.timer` to disable this deployment. Keep `/var/lib/life-notebook` for recovery. Do not stop or change unrelated services.
 
 For data restore, stop the notebook app and backup timer, preserve the current database, replace it with a verified data-only snapshot, remove only this database's stale WAL/SHM files while stopped, restore owner `life-notebook`, and reset the password through `manage.py` before starting again. Re-enable the timer after verifying records. Do not start two writable versions against the same GitHub backup branch.
+
+## Homepage reminders (2026-10-26)
+
+Reminders are stored in the SQLite `reminders` table and exposed only through the authenticated `/api/reminders` endpoint. The existing database is migrated additively, without replacing or clearing old records. Collection revisions prevent simultaneous edits from overwriting each other.
+
+The homepage lists all incomplete reminders regardless of the selected bookkeeping date. Calendar-day counts use the device's current local date; overdue tasks stay visible in red until completed. Today is amber, future deadlines are blue. Completed items remain in a collapsible section and can be restored or edited. The reminder card repaints on returning to the tab and once a minute for date rollover, without polling the server.
+
+Nightly backups include `settings/reminders.json` and the full data-only SQLite snapshot. The unchanged-data fingerprint includes reminder titles, deadlines, notes and completion flags. Completing or restoring a reminder therefore counts as a change. Import supports existing backups without this new file and new backups with it.
+
+Additional verification: `node vps/test_reminder_dates.cjs`; Linux backend/backup checks: `python3 -m unittest discover -s vps -p 'test_*.py' -v`.
