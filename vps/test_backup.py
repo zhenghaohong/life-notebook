@@ -44,6 +44,12 @@ class BackupTest(unittest.TestCase):
                 backup.run()
                 self.assertIn(('push','origin','HEAD:main'),calls)
                 calls.clear()
+                reminder['deleted']=True
+                saved=store.read('reminders')
+                store.write('reminders','',[reminder],saved['sha'])
+                backup.run()
+                self.assertIn(('push','origin','HEAD:main'),calls)
+                calls.clear()
                 self.assertIn(marker,(data/'notebook.sqlite3').read_bytes())
                 diary=store.read('daily','2026-10-15')
                 store.write('daily','2026-10-15',{'zh':'changed','en':''},diary['sha'])

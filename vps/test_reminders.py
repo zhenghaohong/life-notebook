@@ -27,6 +27,25 @@ class RemindersTest(unittest.TestCase):
             restored=Store(Path(tmp)/'restored.sqlite3');restored.import_tree(root)
             self.assertEqual(restored.read('reminders')['data'],[item])
             self.assertEqual(restored.read('daily','2026-10-15')['data']['zh'],'existing diary')
+    def test_delete_restore_and_existing_schema_migration(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path=Path(tmp)/'data.sqlite3'
+            store=Store(path)
+            item={'id':'task-1','title':'test','dueDate':'2026-10-24','note':'','completed':False}
+            saved=store.write('reminders','',[item],None)
+            with store.connect() as db:db.execute('ALTER TABLE reminders DROP COLUMN deleted')
+            store=Store(path)
+            self.assertEqual(store.read('reminders')['data'],[item])
+            deleted={**item,'deleted':True}
+            saved=store.write('reminders','',[deleted],saved['sha'])
+            self.assertTrue(Store(path).read('reminders')['data'][0]['deleted'])
+            root=Path(tmp)/'export';store.export_tree(root)
+            restored=Store(Path(tmp)/'restored.sqlite3');restored.import_tree(root)
+            self.assertEqual(restored.read('reminders')['data'],[deleted])
+            store.write('reminders','',[item],saved['sha'])
+            self.assertEqual(Store(path).read('reminders')['data'],[item])
+            with self.assertRaises(ValueError):validate('reminders',[{**item,'deleted':'true'}])
+
     def test_invalid_dates_duplicate_ids_and_invalid_completed_rejected(self):
         item={'id':'task-1','title':'test','dueDate':'2026-10-24','note':'','completed':False}
         for bad in [{**item,'dueDate':'2026-02-30'},{**item,'completed':'false'},{**item,'title':'   '}]:

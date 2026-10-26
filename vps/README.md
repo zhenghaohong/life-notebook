@@ -73,3 +73,5 @@ The homepage lists all incomplete reminders regardless of the selected bookkeepi
 Nightly backups include `settings/reminders.json` and the full data-only SQLite snapshot. The unchanged-data fingerprint includes reminder titles, deadlines, notes and completion flags. Completing or restoring a reminder therefore counts as a change. Import supports existing backups without this new file and new backups with it.
 
 Additional verification: `node vps/test_reminder_dates.cjs`; Linux backend/backup checks: `python3 -m unittest discover -s vps -p 'test_*.py' -v`.
+
+备忘录支持删除：事项移入“已删除”，可恢复并保留原来的完成状态。SQLite 自动补充删除标记列，旧事项保持不变；删除状态纳入每晚备份及变更检测。

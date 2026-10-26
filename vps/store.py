@@ -48,7 +48,7 @@ def validate(kind, data):
             ids.add(x['id'])
             if not isinstance(x.get('title'),str) or not x['title'].strip() or len(x['title'])>120:
                 raise ValueError('事项名称不能为空，最多 120 字')
-            if not valid_date(x.get('dueDate')) or not isinstance(x.get('note'),str) or len(x['note'])>2000 or type(x.get('completed')) is not bool:
+            if not valid_date(x.get('dueDate')) or not isinstance(x.get('note'),str) or len(x['note'])>2000 or type(x.get('completed')) is not bool or type(x.get('deleted',False)) is not bool:
                 raise ValueError('备忘事项日期或内容无效')
     else:
         raise ValueError('类型无效')
@@ -72,6 +72,8 @@ class Store:
                 CREATE TABLE IF NOT EXISTS metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS reminders(id TEXT PRIMARY KEY,title TEXT NOT NULL,due_date TEXT NOT NULL,note TEXT NOT NULL,completed INTEGER NOT NULL CHECK(completed IN (0,1)));
             ''')
+            if 'deleted' not in {row[1] for row in db.execute('PRAGMA table_info(reminders)')}:
+                db.execute('ALTER TABLE reminders ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0 CHECK(deleted IN (0,1))')
             if not db.execute("SELECT 1 FROM revisions WHERE kind='tags'").fetchone():
                 db.executemany('INSERT INTO tags VALUES (?,?)', enumerate(DEFAULT_TAGS))
                 db.execute("INSERT INTO revisions VALUES ('tags','',1)")
@@ -98,7 +100,7 @@ class Store:
             row = db.execute('SELECT zh,en FROM diaries WHERE date=?',(date,)).fetchone()
             data = dict(row) if row else {'zh':'','en':''}
         elif kind == 'reminders':
-            data=[{**dict(x),'completed':bool(x['completed'])} for x in db.execute('SELECT id,title,due_date AS dueDate,note,completed FROM reminders ORDER BY due_date,id')]
+            data=[{k:v for k,v in {**dict(x),'completed':bool(x['completed']),'deleted':True if x['deleted'] else None}.items() if v is not None} for x in db.execute('SELECT id,title,due_date AS dueDate,note,completed,deleted FROM reminders ORDER BY due_date,id')]
         else:
             data = [x[0] for x in db.execute('SELECT name FROM tags ORDER BY position')]
         return {'data':data,'sha':str(rev[0]) if rev else None}
@@ -119,7 +121,7 @@ class Store:
                 db.execute('INSERT INTO diaries VALUES (?,?,?) ON CONFLICT(date) DO UPDATE SET zh=excluded.zh,en=excluded.en',(date,data['zh'],data['en']))
             elif kind == 'reminders':
                 db.execute('DELETE FROM reminders')
-                db.executemany('INSERT INTO reminders VALUES (?,?,?,?,?)',[(x['id'],x['title'],x['dueDate'],x['note'],int(x['completed'])) for x in data])
+                db.executemany('INSERT INTO reminders VALUES (?,?,?,?,?,?)',[(x['id'],x['title'],x['dueDate'],x['note'],int(x['completed']),int(x.get('deleted',False))) for x in data])
             else:
                 db.execute('DELETE FROM tags')
                 db.executemany('INSERT INTO tags VALUES (?,?)',enumerate(data))
