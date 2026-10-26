@@ -13,3 +13,5 @@ html{color-scheme:only light}body{background:#f5f7fa;color:#1d2633}button:hover:
 @media(max-width:600px){.reminder-card{padding:18px}.reminder-heading>div{gap:7px}.reminder-heading h2{font-size:18px}.reminder-heading .muted{font-size:11px}.reminder-heading button{padding:10px 12px;font-size:12px}.reminder-row{grid-template-columns:28px minmax(0,1fr) auto;padding:12px 10px;gap:8px}.reminder-body strong{font-size:14px}.reminder-badge{font-size:11px;padding:6px 8px}.reminder-controls small{font-size:10px;max-width:100px}.reminder-footer{line-height:1.6}.reminder-note{font-size:11px}}
 
 #reminder-error:empty{display:none}#reminder-error:not(:empty){padding:10px 12px;border-radius:10px;background:#fff1f2;color:#b42336;font-size:13px}
+
+.reminder-delete.secondary{color:#b34d50;background:#fff0f0}#deleted-reminders{margin-top:12px}#deleted-reminders summary{cursor:pointer;color:var(--muted)}
